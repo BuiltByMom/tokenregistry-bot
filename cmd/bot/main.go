@@ -10,11 +10,12 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/builtbymom/TokenRegistry-bot/bindings/tokenedits"
+	"github.com/builtbymom/TokenRegistry-bot/bindings/tokenregistry"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/joho/godotenv"
@@ -143,21 +144,19 @@ func main() {
 }
 
 func monitorEvents(ctx context.Context, client *ethclient.Client, chain ChainConfig, bot *tgbotapi.BotAPI, channelID string, config Config) {
-	// Define the event signatures we want to monitor
-	eventSignatures := map[string]string{
-		// TokenRegistry events
-		"TokenAdded":          "TokenAdded(address,address)",
-		"TokenApproved":       "TokenApproved(address)",
-		"TokenRejected":       "TokenRejected(address,string)",
-	
-		// TokenEdits events
-		"EditProposed":        "EditProposed(address,uint256,address,(string,string)[])",
-		"EditAccepted":        "EditAccepted(address,uint256)",
-		"EditRejected":        "EditRejected(address,uint256,string)",
-
-		// Common events
-		"TokentrollerUpdated": "TokentrollerUpdated(address)",
+	// Create contract instances
+	registry, err := tokenregistry.NewTokenRegistry(chain.RegistryAddress, client)
+	if err != nil {
+		log.Printf("Failed to create TokenRegistry instance: %v", err)
+		return
 	}
+
+	edits, err := tokenedits.NewTokenEdits(chain.EditsAddress, client)
+	if err != nil {
+		log.Printf("Failed to create TokenEdits instance: %v", err)
+		return
+	}
+
 	// Create a query for all events from both contracts
 	query := ethereum.FilterQuery{
 		Addresses: []common.Address{chain.RegistryAddress, chain.EditsAddress},
@@ -179,29 +178,6 @@ func monitorEvents(ctx context.Context, client *ethclient.Client, chain ChainCon
 		case err := <-sub.Err():
 			log.Printf("Subscription error on %s: %v", chain.Name, err)
 		case evtLog := <-logs:
-			// Get the event signature from the first topic
-			eventSig := evtLog.Topics[0].Hex()
-			log.Printf("Event signature: %s", eventSig)
-			
-			// Find the matching event name
-			var eventName string
-			for name, sig := range eventSignatures {
-				// Convert the signature to keccak256 hash
-				hash := crypto.Keccak256Hash([]byte(sig)).Hex()
-				log.Printf("Checking %s: %s", name, hash)
-				if hash == eventSig {
-					eventName = name
-					break
-				}
-			}
-
-			if eventName == "" {
-				log.Printf("Unknown event signature: %s", eventSig)
-				continue
-			}
-
-			log.Printf("Matched event: %s", eventName)
-
 			// Get transaction details
 			tx, _, err := client.TransactionByHash(ctx, evtLog.TxHash)
 			if err != nil {
@@ -216,7 +192,6 @@ func monitorEvents(ctx context.Context, client *ethclient.Client, chain ChainCon
 				continue
 			}
 
-			// Create a signer based on the chain ID
 			signer := types.LatestSignerForChainID(chainID)
 			sender, err := types.Sender(signer, tx)
 			if err != nil {
@@ -224,43 +199,49 @@ func monitorEvents(ctx context.Context, client *ethclient.Client, chain ChainCon
 				continue
 			}
 
-			// Get token address based on event type
+			// Try to parse the event using the generated bindings
+			var eventName string
 			var tokenAddr common.Address
 			var editID *big.Int
 			var reason string
-			switch eventName {
-			case "TokenAdded":
-				tokenAddr = common.BytesToAddress(evtLog.Topics[1].Bytes())
-			case "TokenApproved":
-				tokenAddr = common.BytesToAddress(evtLog.Topics[1].Bytes())
-			case "TokenRejected":
-				tokenAddr = common.BytesToAddress(evtLog.Topics[1].Bytes())
-				if len(evtLog.Data) > 32 {
-					reason = string(evtLog.Data[32:])
+
+			switch evtLog.Address {
+			case chain.RegistryAddress:
+				// Try to parse TokenRegistry events
+				if tokenAdded, err := registry.ParseTokenAdded(evtLog); err == nil {
+					eventName = "TokenAdded"
+					tokenAddr = tokenAdded.ContractAddress
+				} else if tokenApproved, err := registry.ParseTokenApproved(evtLog); err == nil {
+					eventName = "TokenApproved"
+					tokenAddr = tokenApproved.ContractAddress
+				} else if tokenRejected, err := registry.ParseTokenRejected(evtLog); err == nil {
+					eventName = "TokenRejected"
+					tokenAddr = tokenRejected.ContractAddress
+					reason = tokenRejected.Reason
+				} else if tokentrollerUpdated, err := registry.ParseTokentrollerUpdated(evtLog); err == nil {
+					eventName = "TokentrollerUpdated"
+					tokenAddr = tokentrollerUpdated.NewTokentroller
 				}
-			case "EditProposed":
-				tokenAddr = common.BytesToAddress(evtLog.Topics[1].Bytes())
-				// editId is the first 32 bytes of the data
-				if len(evtLog.Data) >= 32 {
-					editID = new(big.Int).SetBytes(evtLog.Data[:32])
+			case chain.EditsAddress:
+				// Try to parse TokenEdits events
+				if editProposed, err := edits.ParseEditProposed(evtLog); err == nil {
+					eventName = "EditProposed"
+					tokenAddr = editProposed.ContractAddress
+					editID = editProposed.EditId
+				} else if editAccepted, err := edits.ParseEditAccepted(evtLog); err == nil {
+					eventName = "EditAccepted"
+					tokenAddr = editAccepted.ContractAddress
+					editID = editAccepted.EditId
+				} else if editRejected, err := edits.ParseEditRejected(evtLog); err == nil {
+					eventName = "EditRejected"
+					tokenAddr = editRejected.ContractAddress
+					editID = editRejected.EditId
+					reason = editRejected.Reason
 				}
-				// metadata is after the editId in the data but we don't need it for the message
-			case "EditAccepted":
-				tokenAddr = common.BytesToAddress(evtLog.Topics[1].Bytes())
-				// editId is the first 32 bytes of the data
-				if len(evtLog.Data) >= 32 {
-					editID = new(big.Int).SetBytes(evtLog.Data[:32])
-				}
-			case "EditRejected":
-				tokenAddr = common.BytesToAddress(evtLog.Topics[1].Bytes())
-				if len(evtLog.Data) >= 32 {
-					editID = new(big.Int).SetBytes(evtLog.Data[:32])
-					if len(evtLog.Data) > 32 {
-						reason = string(evtLog.Data[32:])
-					}
-				}
-			default:
-				log.Printf("Unknown event type: %s", eventName)
+			}
+
+			if eventName == "" {
+				log.Printf("Unknown event from address %s", evtLog.Address.Hex())
 				continue
 			}
 
@@ -273,17 +254,15 @@ func monitorEvents(ctx context.Context, client *ethclient.Client, chain ChainCon
 			// Format URL based on event type
 			var url string
 			if editID != nil {
-				// For edit events, include both token address and edit ID
 				url = fmt.Sprintf("%s/%s?token=%s-%s", config.UIBaseURL, strings.ToLower(chain.Name), tokenAddr.Hex(), editID.String())
 			} else {
-				// For regular token events, just include token address
 				url = fmt.Sprintf("%s/%s?token=%s", config.UIBaseURL, strings.ToLower(chain.Name), tokenAddr.Hex())
 			}
 
-			tokenExplorerURL := fmt.Sprintf("%s/token/%s", chain.ExplorerURL, tokenAddr.Hex())
+			
 			
 			// Build message with optional reason
-			message := fmt.Sprintf("%s New %s event detected\n\nChain: %s (ID: %d)\nToken: %s (%s)\nContract: [%s](%s)\nSubmitter: %s\nTransaction: [%s](%s/tx/%s)",
+			message := fmt.Sprintf("%s New %s event detected\n\nChain: %s (ID: %d)\nToken: %s (%s)\nContract: [%s](%s/token/%s)\nSubmitter: [%s](%s/address/%s)\nTransaction: [%s](%s/tx/%s)",
 				emoji,
 				eventName,
 				chain.Name,
@@ -291,7 +270,10 @@ func monitorEvents(ctx context.Context, client *ethclient.Client, chain ChainCon
 				tokenInfo.Name,
 				tokenInfo.Symbol,
 				tokenAddr.Hex(),
-				tokenExplorerURL,
+				chain.ExplorerURL,
+				tokenAddr.Hex(),
+				sender.Hex(),
+				chain.ExplorerURL,
 				sender.Hex(),
 				evtLog.TxHash.Hex()[:8] + "..." + evtLog.TxHash.Hex()[len(evtLog.TxHash.Hex())-6:],
 				chain.ExplorerURL,
@@ -303,10 +285,8 @@ func monitorEvents(ctx context.Context, client *ethclient.Client, chain ChainCon
 				message += fmt.Sprintf("\nReason: %s", reason)
 			}
 
-			// Add URLs
-			message += fmt.Sprintf("\n[View in UI](%s)",
-				url,
-			)
+			// Add URL
+			message += fmt.Sprintf("\n[View in UI](%s)", url)
 
 			// Send message with Markdown formatting
 			telegramMsg := tgbotapi.NewMessageToChannel(channelID, message)
