@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Create bindings directory if it doesn't exist
-mkdir -p bindings
+# Create contracts directory if it doesn't exist
+mkdir -p pkg/contracts/tokenedits pkg/contracts/tokenregistry
 
 # Get the path to abigen
 ABIGEN_PATH="$HOME/go/bin/abigen"
@@ -20,16 +20,16 @@ mkdir -p tmp
 jq .abi ../TokenRegistry/out/TokenRegistry.sol/TokenRegistry.json > tmp/TokenRegistry.abi.json
 jq .abi ../TokenRegistry/out/TokenEdits.sol/TokenEdits.json > tmp/TokenEdits.abi.json
 
-# Generate bindings for TokenRegistry with a specific package name
+# Generate contracts for TokenRegistry with a specific package name
 $ABIGEN_PATH --abi tmp/TokenRegistry.abi.json \
        --pkg tokenregistry \
-       --out bindings/tokenregistry/tokenregistry.go \
+       --out pkg/contracts/tokenregistry/tokenregistry.go \
        --type TokenRegistry
 
-# Generate bindings for TokenEdits with a different package name
+# Generate contracts for TokenEdits with a different package name
 $ABIGEN_PATH --abi tmp/TokenEdits.abi.json \
        --pkg tokenedits \
-       --out bindings/tokenedits/tokenedits.go \
+       --out pkg/contracts/tokenedits/tokenedits.go \
        --type TokenEdits
 
 # Clean up temporary files
