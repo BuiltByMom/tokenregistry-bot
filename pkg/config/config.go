@@ -14,6 +14,7 @@ type ChainConfig struct {
 	RegistryAddress common.Address
 	EditsAddress   common.Address
 	ExplorerURL    string
+	ChainID        int64
 }
 
 // Config holds the configuration for the bot
@@ -41,6 +42,7 @@ func LoadConfig() (*Config, error) {
 				RegistryAddress: common.HexToAddress(os.Getenv("OPTIMISM_REGISTRY_ADDRESS")),
 				EditsAddress:   common.HexToAddress(os.Getenv("OPTIMISM_EDITS_ADDRESS")),
 				ExplorerURL:    "https://optimistic.etherscan.io",
+				ChainID:        10,
 			},
 			{
 				Name:           "Base",
@@ -48,6 +50,7 @@ func LoadConfig() (*Config, error) {
 				RegistryAddress: common.HexToAddress(os.Getenv("BASE_REGISTRY_ADDRESS")),
 				EditsAddress:   common.HexToAddress(os.Getenv("BASE_EDITS_ADDRESS")),
 				ExplorerURL:    "https://basescan.org",
+				ChainID:        8453,
 			},
 		},
 	}, nil
