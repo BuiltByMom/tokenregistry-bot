@@ -31,13 +31,19 @@ jobs:
         env:
           OPTIMISM_RPC_URL: ${{ secrets.OPTIMISM_RPC_URL }}
           BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+
+          OPTIMISM_REGISTRY_ADDRESS: ${{ vars.OPTIMISM_REGISTRY_ADDRESS }}
+          OPTIMISM_EDITS_ADDRESS: ${{ vars.OPTIMISM_EDITS_ADDRESS }}
+          BASE_REGISTRY_ADDRESS: ${{ vars.BASE_REGISTRY_ADDRESS }}
+          BASE_EDITS_ADDRESS: ${{ vars.BASE_EDITS_ADDRESS }}
         run: go run ./cmd/tokenlists
 
       - name: Commit files
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git commit -a -m "[bot] - Update lists"
+          git add data/tokenlists/
+          git commit -m "[bot] - Update lists" || exit 0
 
       - name: Push changes
         uses: ad-m/github-push-action@master
