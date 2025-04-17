@@ -25,11 +25,10 @@ type Config struct {
 	Chains           []ChainConfig
 }
 
-// LoadConfig loads configuration from environment variables
+// LoadConfig loads configuration from .env file if present, otherwise from environment variables
 func LoadConfig() (*Config, error) {
-	if err := godotenv.Load(); err != nil {
-		return nil, err
-	}
+	// Try to load from .env file, but don't fail if it doesn't exist
+	_ = godotenv.Load()
 
 	return &Config{
 		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),

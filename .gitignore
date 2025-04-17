@@ -38,3 +38,4 @@ dist/
 # Test coverage files
 coverage.txt
 profile.out
+.secrets
