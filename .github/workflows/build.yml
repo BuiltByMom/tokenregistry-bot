@@ -1,0 +1,53 @@
+name: Update Token Lists
+
+on:
+  schedule:
+    - cron: "0 * * * *" # Run at the start of every hour
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "data/tokenlists/**" # Ignore changes to token lists
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: "./go.mod"
+          go-version: "1.24"
+
+      - name: Run token list generator
+        env:
+          OPTIMISM_RPC_URL: ${{ secrets.OPTIMISM_RPC_URL }}
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+
+          OPTIMISM_REGISTRY_ADDRESS: ${{ vars.OPTIMISM_REGISTRY_ADDRESS }}
+          OPTIMISM_EDITS_ADDRESS: ${{ vars.OPTIMISM_EDITS_ADDRESS }}
+          BASE_REGISTRY_ADDRESS: ${{ vars.BASE_REGISTRY_ADDRESS }}
+          BASE_EDITS_ADDRESS: ${{ vars.BASE_EDITS_ADDRESS }}
+        run: go run ./cmd/tokenlists
+
+      - name: Commit files
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add data/tokenlists/
+          git commit -m "[bot] - Update lists" || exit 0
+
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
