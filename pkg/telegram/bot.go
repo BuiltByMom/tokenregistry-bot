@@ -9,7 +9,7 @@ import (
 
 // Bot wraps the Telegram bot functionality
 type Bot struct {
-	api      *tgbotapi.BotAPI
+	api       *tgbotapi.BotAPI
 	channelID string
 }
 
@@ -21,7 +21,7 @@ func New(token, channelID string) (*Bot, error) {
 	}
 
 	return &Bot{
-		api:      api,
+		api:       api,
 		channelID: channelID,
 	}, nil
 }

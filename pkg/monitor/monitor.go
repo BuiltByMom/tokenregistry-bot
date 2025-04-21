@@ -11,6 +11,7 @@ import (
 	"github.com/builtbymom/TokenRegistry-bot/pkg/contracts/tokenedits"
 	"github.com/builtbymom/TokenRegistry-bot/pkg/contracts/tokenregistry"
 	"github.com/builtbymom/TokenRegistry-bot/pkg/telegram"
+	"github.com/builtbymom/TokenRegistry-bot/pkg/trigger"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -63,16 +64,23 @@ type Monitor struct {
 	chain   config.ChainConfig
 	bot     *telegram.Bot
 	config  *config.Config
+	trigger *trigger.GitHubTrigger
 }
 
 // New creates a new Monitor instance
-func New(client *ethclient.Client, chain config.ChainConfig, bot *telegram.Bot, config *config.Config) *Monitor {
+func New(client *ethclient.Client, chain config.ChainConfig, bot *telegram.Bot, config *config.Config, trigger *trigger.GitHubTrigger) *Monitor {
 	return &Monitor{
-		client: client,
-		chain:  chain,
-		bot:    bot,
-		config: config,
+		client:  client,
+		chain:   chain,
+		bot:     bot,
+		config:  config,
+		trigger: trigger,
 	}
+}
+
+// GetChainNameForLog returns the chain name for logging purposes.
+func (m *Monitor) GetChainNameForLog() string {
+	return m.chain.Name
 }
 
 // Start begins monitoring events for the chain
@@ -215,8 +223,40 @@ func (m *Monitor) handleEvent(ctx context.Context, registry *tokenregistry.Token
 
 	message += fmt.Sprintf("\n[View in UI](%s)", url)
 
-	return m.bot.SendMessage(message)
+	// Send the primary event notification
+	if err := m.bot.SendMessage(message); err != nil {
+		log.Printf("Failed to send primary event notification for %s: %v", eventName, err)
+		// Don't return here, still attempt to trigger workflow if needed
+	}
+
+	// Trigger GitHub Action workflow for specific events
+	switch eventName {
+	case "TokenApproved", "TokenRejected", "EditAccepted":
+		if m.trigger != nil {
+			log.Printf("Event %s triggered GitHub Action update for branch main", eventName)
+			// Trigger the workflow on the main branch
+			if err := m.trigger.TriggerTokenListUpdate("main"); err != nil {
+				log.Printf("Error triggering GitHub Action after %s event: %v", eventName, err)
+				// Send a follow-up notification about the trigger failure
+				followUpMsg := fmt.Sprintf("⚠️ Failed to trigger GitHub Action update after %s event: %v", eventName, err)
+				if notifyErr := m.bot.SendMessage(followUpMsg); notifyErr != nil {
+					log.Printf("Failed to send GitHub Action trigger failure notification: %v", notifyErr)
+				}
+				// Optionally return err here if trigger failure is critical
+			} else {
+				followUpMsg := fmt.Sprintf("⚙️ Triggered GitHub Action to update token lists after %s event.", eventName)
+				if notifyErr := m.bot.SendMessage(followUpMsg); notifyErr != nil {
+					log.Printf("Failed to send GitHub Action trigger success notification: %v", notifyErr)
+				}
+			}
+		} else {
+			log.Printf("GitHub trigger is not configured, cannot trigger workflow after %s event.", eventName)
+		}
+	}
+
+	return nil // Return nil as primary notification was sent (or attempted)
 }
+
 
 func (m *Monitor) getTokenInfo(ctx context.Context, tokenAddr common.Address) TokenInfo {
 	// Parse the ABI

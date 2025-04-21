@@ -52,12 +52,14 @@ func (g *Generator) GenerateForChain(chain config.ChainConfig) error {
 	const pageSize = 100
 	offset := big.NewInt(0)
 	totalTokens := big.NewInt(0)
+	var listErr error
 
 	for {
 		// Get tokens for current page
 		result, err := registry.ListTokens(&bind.CallOpts{}, offset, big.NewInt(pageSize), 1, false)
 		if err != nil {
-			return fmt.Errorf("failed to list tokens for %s: %v", chain.Name, err)
+			listErr = err
+			break
 		}
 
 		// Update total tokens if this is the first page
@@ -82,6 +84,10 @@ func (g *Generator) GenerateForChain(chain config.ChainConfig) error {
 		if offset.Cmp(totalTokens) >= 0 {
 			break
 		}
+	}
+
+	if listErr != nil {
+		return fmt.Errorf("failed to list tokens for %s: %v", chain.Name, listErr)
 	}
 
 	// Create chain-specific output directory

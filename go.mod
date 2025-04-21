@@ -5,7 +5,9 @@ go 1.24
 require (
 	github.com/ethereum/go-ethereum v1.15.8
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
+	github.com/google/go-github/v60 v60.0.0
 	github.com/joho/godotenv v1.5.1
+	golang.org/x/oauth2 v0.29.0
 )
 
 require (
@@ -22,6 +24,7 @@ require (
 	github.com/ethereum/go-verkle v0.2.2 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
+	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect

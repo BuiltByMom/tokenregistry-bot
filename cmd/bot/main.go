@@ -10,6 +10,7 @@ import (
 	"github.com/builtbymom/TokenRegistry-bot/pkg/config"
 	"github.com/builtbymom/TokenRegistry-bot/pkg/monitor"
 	"github.com/builtbymom/TokenRegistry-bot/pkg/telegram"
+	"github.com/builtbymom/TokenRegistry-bot/pkg/trigger"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
@@ -24,6 +25,15 @@ func main() {
 	bot, err := telegram.New(cfg.TelegramBotToken, cfg.TelegramChannel)
 	if err != nil {
 		log.Fatalf("Failed to create bot: %v", err)
+	}
+
+	// Initialize GitHub Trigger (optional)
+	ghTrigger, err := trigger.NewGitHubTriggerFromEnv()
+	if err != nil {
+		log.Printf("Warning: Failed to initialize GitHub trigger: %v. GitHub Action triggers disabled.", err)
+	}
+	if ghTrigger == nil {
+		log.Printf("Info: GitHub trigger environment variables not set. GitHub Action triggers disabled.")
 	}
 
 	// Get chain names for startup message
@@ -54,12 +64,13 @@ func main() {
 			continue
 		}
 
-		mon := monitor.New(client, chain, bot, cfg)
-		go func() {
-			if err := mon.Start(ctx); err != nil {
-				log.Printf("Error in monitor for %s: %v", chain.Name, err)
+		// Pass the ghTrigger to the monitor
+		mon := monitor.New(client, chain, bot, cfg, ghTrigger)
+		go func(m *monitor.Monitor, chainName string) {
+			if err := m.Start(ctx); err != nil {
+				log.Printf("Error in monitor for %s: %v", chainName, err)
 			}
-		}()
+		}(mon, chain.Name)
 	}
 
 	// Wait for interrupt signal
