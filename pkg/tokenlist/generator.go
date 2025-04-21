@@ -44,7 +44,7 @@ func (g *Generator) GenerateForChain(chain config.ChainConfig) error {
 			Minor: 0,
 			Patch: 0,
 		},
-		Keywords: []string{"ajna", "token registry", chain.Name},
+		Keywords: []string{"token registry", chain.Name},
 		Tokens:   []Token{},
 	}
 
