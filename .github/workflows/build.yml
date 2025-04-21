@@ -8,9 +8,6 @@ on:
       - main
     paths-ignore:
       - "data/tokenlists/**" # Ignore changes to token lists
-  pull_request:
-    branches:
-      - main
   workflow_dispatch: # Allow manual triggering
 
 jobs:
