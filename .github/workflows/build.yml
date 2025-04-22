@@ -48,11 +48,6 @@ jobs:
             echo "Error running token list generator"
             exit 1
           fi
-
-      - name: Check for errors
-        if: steps.generate.outcome != 'success'
-        run: exit 1
-
       - name: Commit files
         if: steps.generate.outputs.changes == 'true'
         run: |
