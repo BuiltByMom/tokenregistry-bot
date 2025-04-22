@@ -26,24 +26,35 @@ jobs:
           go-version: "1.24"
 
       - name: Run token list generator
+        id: generate
         env:
           OPTIMISM_RPC_URL: ${{ secrets.OPTIMISM_RPC_URL }}
           BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
-
           OPTIMISM_REGISTRY_ADDRESS: ${{ vars.OPTIMISM_REGISTRY_ADDRESS }}
           OPTIMISM_EDITS_ADDRESS: ${{ vars.OPTIMISM_EDITS_ADDRESS }}
           BASE_REGISTRY_ADDRESS: ${{ vars.BASE_REGISTRY_ADDRESS }}
           BASE_EDITS_ADDRESS: ${{ vars.BASE_EDITS_ADDRESS }}
-        run: go run ./cmd/tokenlists
+        run: |
+          go run ./cmd/tokenlists
+          # Exit code 0 means changes detected, 2 means no changes, 1 means error
+          if [ $? -eq 0 ]; then
+            echo "changes=true" >> $GITHUB_OUTPUT
+          elif [ $? -eq 2 ]; then
+            echo "changes=false" >> $GITHUB_OUTPUT
+          else
+            exit 1
+          fi
 
       - name: Commit files
+        if: steps.generate.outputs.changes == 'true'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add data/tokenlists/
-          git commit -m "[bot] - Update lists" || exit 0
+          git commit -m "[bot] - Update lists"
 
       - name: Push changes
+        if: steps.generate.outputs.changes == 'true'
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
