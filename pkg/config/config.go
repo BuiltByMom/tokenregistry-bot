@@ -51,6 +51,14 @@ func LoadConfig() (*Config, error) {
 				ExplorerURL:    "https://basescan.org",
 				ChainID:        8453,
 			},
+			{
+				Name:           "Sonic",
+				RPCURL:         os.Getenv("SONIC_RPC_URL"),
+				RegistryAddress: common.HexToAddress(os.Getenv("SONIC_REGISTRY_ADDRESS")),
+				EditsAddress:   common.HexToAddress(os.Getenv("SONIC_EDITS_ADDRESS")),
+				ExplorerURL:    "https://sonicscan.org/",
+				ChainID:        146,
+			},
 		},
 	}, nil
 } 
